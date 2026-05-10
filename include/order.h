@@ -30,6 +30,7 @@ static_assert(sizeof(Order) == 64, "Order must fit in one cache line");
 enum class EventType : uint8_t {
     OrderAck,
     OrderCancel,
+    OrderModify,   // in-place quantity reduction at same price (preserves time priority)
     Trade,
     TopOfBookUpdate,
 };
