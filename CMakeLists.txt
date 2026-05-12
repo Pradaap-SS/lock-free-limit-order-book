@@ -15,12 +15,10 @@ else()
 endif()
 
 # ── Compile flags ─────────────────────────────────────────────────────────────
-# Release: full optimization + native ISA tuning
 set(CMAKE_CXX_FLAGS_RELEASE
-    "-O3 -march=native -DNDEBUG -fno-exceptions -fvectorize -fslp-vectorize")
+    "-O3 -march=native -DNDEBUG -fvectorize -fslp-vectorize")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO
     "-O2 -march=native -g -DNDEBUG")
-# Debug: address + undefined sanitizers for test builds
 set(CMAKE_CXX_FLAGS_DEBUG
     "-O0 -g -fsanitize=address,undefined -fno-omit-frame-pointer")
 
@@ -53,20 +51,35 @@ endif()
 # ── Common include ────────────────────────────────────────────────────────────
 include_directories(include)
 
-# ── Main library (interface target for shared flags) ──────────────────────────
+# ── Shared interface target ───────────────────────────────────────────────────
 add_library(orderbook_lib INTERFACE)
 target_include_directories(orderbook_lib INTERFACE include)
 
-# ── Main executable ───────────────────────────────────────────────────────────
+# ── Day 1+2: main smoke test + latency demo ───────────────────────────────────
 add_executable(order_book src/main.cpp)
 target_link_libraries(order_book PRIVATE orderbook_lib)
+
+# ── Day 3: ITCH replay demo ───────────────────────────────────────────────────
+add_executable(replay src/replay_main.cpp)
+target_link_libraries(replay PRIVATE orderbook_lib)
 
 # ── Google Benchmark ──────────────────────────────────────────────────────────
 find_package(benchmark QUIET)
 if(benchmark_FOUND)
+    # Day 1+2 benchmarks
     add_executable(latency_bench benchmarks/latency_bench.cpp)
     target_link_libraries(latency_bench PRIVATE orderbook_lib benchmark::benchmark)
-    message(STATUS "Google Benchmark found — latency_bench target enabled")
+
+    # Day 1+2 benchmarks with tracing (separate target, no rebuild needed)
+    add_executable(latency_bench_traced benchmarks/latency_bench.cpp)
+    target_compile_definitions(latency_bench_traced PRIVATE ENABLE_TRACING)
+    target_link_libraries(latency_bench_traced PRIVATE orderbook_lib benchmark::benchmark)
+
+    # Day 3: replay throughput benchmark
+    add_executable(replay_bench benchmarks/replay_bench.cpp)
+    target_link_libraries(replay_bench PRIVATE orderbook_lib benchmark::benchmark)
+
+    message(STATUS "Google Benchmark found — latency_bench, replay_bench targets enabled")
 else()
     message(WARNING "Google Benchmark not found.  Run: brew install google-benchmark")
 endif()
@@ -75,17 +88,18 @@ endif()
 find_package(GTest QUIET)
 if(GTest_FOUND)
     enable_testing()
+
+    # Day 1+2 order book tests
     add_executable(order_book_tests tests/order_book_test.cpp)
     target_link_libraries(order_book_tests PRIVATE orderbook_lib GTest::GTest GTest::Main)
     add_test(NAME OrderBookTests COMMAND order_book_tests)
-    message(STATUS "Google Test found — order_book_tests target enabled")
+
+    # Day 3 ITCH parser tests
+    add_executable(itch_parser_tests tests/itch_parser_test.cpp)
+    target_link_libraries(itch_parser_tests PRIVATE orderbook_lib GTest::GTest GTest::Main)
+    add_test(NAME ItchParserTests COMMAND itch_parser_tests)
+
+    message(STATUS "Google Test found — order_book_tests, itch_parser_tests targets enabled")
 else()
     message(WARNING "Google Test not found.  Run: brew install googletest")
-endif()
-
-# ── Tracing build (separate target, no interference with clean Release) ───────
-if(benchmark_FOUND)
-    add_executable(latency_bench_traced benchmarks/latency_bench.cpp)
-    target_compile_definitions(latency_bench_traced PRIVATE ENABLE_TRACING)
-    target_link_libraries(latency_bench_traced PRIVATE orderbook_lib benchmark::benchmark)
 endif()
